@@ -79,7 +79,12 @@ class Yolov1(nn.Module):
 class yolov3(nn.Module):
     def __init__(self, num_class, init_param : bool = False) -> None:
         super(yolov3, self).__init__()
-        
+
+
+class EmptyLayer(nn.Module):
+    def __init__(self):
+        super(EmptyLayer, self).__init__()
+
 if __name__ == '__main__':
     x = torch.ones([3, 448, 448])
     x = x.unsqueeze(0)

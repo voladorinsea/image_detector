@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+from net import EmptyLayer
 import numpy as np
 
 def parse_cfg(cfgfile):
@@ -83,9 +84,37 @@ def create_modules(blocks):
             else: 
                 pass
 
-        if x["type"] == "upsample":
+        elif x["type"] == "upsample":
             stride = int("stride")
+            upsample = nn.Upsample(scale_factor = stride, mode = "bilinear")
+            module.add_module("upsample_{}".format(index), upsample)
+
+        elif x["type"] == "Route":
+            x["layers"] = x["layers"].split(',')
+            start = int(x["layers"][0])
+            try:
+                end = int(x["layers"][1])
+            except:
+                end = 0
+
+            # this step is uesd to transform absolute index to relative index
+            if start > 0:
+                start = start - index
+            if end > 0:
+                end = end - index
+            route = EmptyLayer()
+            module.add_module("route_{}".format(index), route)
+            if end < 0:
+                filters = output_filters[index + start] + output_filters[index + end]
+            else:
+                filters = output_filters[index + start]\
             
+        elif x["type"] == "shortcut":
+            shortcut = EmptyLayer()
+            module.add_module("shortcut_{}".format(index), shortcut)
+        
+
+
 
 
 
