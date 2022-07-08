@@ -36,9 +36,9 @@ random=1
 # Testing
 batch=1
 subdivisions=1
-# Training
-# batch=64
-# subdivisions=16
+[Training]
+[batch=64]
+[subdivisions=16]
 width= 320
 height = 320
 channels=3
