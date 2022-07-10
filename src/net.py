@@ -85,6 +85,10 @@ class EmptyLayer(nn.Module):
     def __init__(self):
         super(EmptyLayer, self).__init__()
 
+class DetectionLayer(nn.Module):
+    def __init__(self, anchors):
+        super(DetectionLayer, self).__init__()
+        self.anchors = anchors
 if __name__ == '__main__':
     x = torch.ones([3, 448, 448])
     x = x.unsqueeze(0)

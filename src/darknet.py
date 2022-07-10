@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-from net import EmptyLayer
+from net import DetectionLayer, EmptyLayer
 import numpy as np
 
 def parse_cfg(cfgfile):
@@ -37,14 +37,14 @@ def parse_cfg(cfgfile):
             block["type"] = line[1:-1].rstrip()
         else:
             key, value = line.split('=')
-            block[key] = value
+            block[key.strip()] = value.strip()
     return blocks
 
 def create_modules(blocks):
     net_info = blocks[0]
     module_list = nn.ModuleList()
     # make sure the number of previous layer's filters
-    prev_filter = 3
+    prev_filters = 3
     output_filters = []
     for index, x in enumerate(blocks[1:]):
         module = nn.Sequential()
@@ -59,7 +59,7 @@ def create_modules(blocks):
             filters = int(x["filters"])
             kernel_size = int(x["size"])
             stride = int(x["stride"])
-            padding = int("pad")
+            padding = int(x["pad"])
             activation = x["activation"]
 
             # pad规则
@@ -69,7 +69,7 @@ def create_modules(blocks):
                 pad = 0
             
             # Add the Convolutional Layer
-            conv = nn.Conv2d(prev_filter, filters, kernel_size, stride, pad)
+            conv = nn.Conv2d(prev_filters, filters, kernel_size, stride, pad, bias)
             module.add_module("conv_{}".format(index), conv)
 
             # Add the Batch Norm Layer
@@ -85,7 +85,7 @@ def create_modules(blocks):
                 pass
 
         elif x["type"] == "upsample":
-            stride = int("stride")
+            stride = int(x["stride"])
             upsample = nn.Upsample(scale_factor = stride, mode = "bilinear")
             module.add_module("upsample_{}".format(index), upsample)
 
@@ -107,12 +107,32 @@ def create_modules(blocks):
             if end < 0:
                 filters = output_filters[index + start] + output_filters[index + end]
             else:
-                filters = output_filters[index + start]\
+                filters = output_filters[index + start]
             
         elif x["type"] == "shortcut":
             shortcut = EmptyLayer()
             module.add_module("shortcut_{}".format(index), shortcut)
         
+        elif x["type"] == "yolo":
+            mask = x["mask"].split(',')
+            mask = [int(x) for x in mask]
+            anchors = x["anchors"].split(',')
+            anchors = [int(x) for x in anchors]
+            anchors = [(anchors[i], anchors[i+1]) for i in range(0, len(anchors), 2)]
+            anchors = [anchors[i] for i in mask]
+
+            detection = DetectionLayer(anchors)
+            module.add_module("yolo_{}".format(index), detection)
+        
+        module_list.append(module)
+        prev_filters = filters
+        output_filters.append(filters)
+    
+    return (net_info, module_list)
+
+if __name__ == "__main__":
+    blocks = parse_cfg("cfg/yolov3.cfg")
+    print(create_modules(blocks))
 
 
 
