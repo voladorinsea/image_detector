@@ -89,7 +89,6 @@ class Yolov1(nn.Module):
 class yolov3(nn.Module):
     def __init__(self, num_class, init_param : bool = False) -> None:
         super(yolov3, self).__init__()
-
 def parse_cfg(cfgfile):
     """
     Takes a configuration file
@@ -119,7 +118,6 @@ def parse_cfg(cfgfile):
             block[key.strip()] = value.strip()
     blocks.append(block)
     return blocks
-
 def create_modules(blocks):
     net_info = blocks[0]
     module_list = nn.ModuleList()
@@ -209,7 +207,6 @@ def create_modules(blocks):
         output_filters.append(filters)
     
     return (net_info, module_list)
-
 def get_test_input():
     img = cv2.imread("data_set\dog-cycle-car.png")
     img = cv2.resize(img, (416,416))          #Resize to the input dimension
@@ -219,11 +216,9 @@ def get_test_input():
     img_ = torch.from_numpy(img_).float()     #Convert to float
     img_ = Variable(img_)                     # Convert to Variable
     return img_
-
 class EmptyLayer(nn.Module):
     def __init__(self):
         super(EmptyLayer, self).__init__()
-
 class DetectionLayer(nn.Module):
     def __init__(self, anchors):
         super(DetectionLayer, self).__init__()
@@ -243,16 +238,12 @@ class Darknet(nn.Module):
         cache_outputs = {}
         write = 0
 
-        check = 0
         if CUDA:
             x = x.cuda()
         for i, module in enumerate(modules):
-            if check:
-                t1 = time.perf_counter()
             module_type = (module["type"])
             if module_type == "convolutional" or module_type == "upsample":
                 x = self.module_list[i](x)
-                check = 1
                 
             elif module_type == "route":
                 layers = module["layers"]

@@ -53,3 +53,128 @@ def predict_transform(prediction, inp_dim, anchors, num_classes, CUDA):
     prediction[:,:,:4] *= stride
 
     return prediction
+def bbox_iou(box1, box2):
+    """
+    Returns the IoU of two bounding boxes 
+    """
+    b1_x1, b1_y1, b1_x2, b1_y2 = box1[:0], box1[:1], box1[:2], box1[:3]
+    b2_x1, b2_y1, b2_x2, b2_y2 = box2[:0], box2[:1], box2[:2], box2[:3]
+
+    inter_rect_x1 = torch.max(b1_x1, b2_x1)
+    inter_rect_y1 = torch.max(b1_y1, b2_y1)
+    inter_rect_x2 = torch.min(b1_x2, b2_x2)
+    inter_rect_y2 = torch.min(b1_y2, b2_y2)
+
+    # because in computer an image is expressed by pixel-coordinate,
+    # which is from 0 to maxium, so when we want to calculate height or width,
+    # it is necessary to +1 pixel to get a correct answer
+    inter_area = torch.clamp(inter_rect_x2 - inter_rect_x1 + 1, min = 0)\
+                 * torch.clamp(inter_rect_y2 - inter_rect_y1 + 1, min = 0)
+    
+    b1_area = (b1_x2 - b1_x1 + 1)*(b1_y2 - b1_y1 + 1)
+    b2_area = (b2_x2 - b2_x1 + 1)*(b2_y2 - b2_y1 + 1)
+
+    iou = inter_area/(b1_area + b2_area - inter_area)
+
+    return iou
+
+
+'''
+The functions takes as as input the prediction, confidence (objectness score threshold), 
+num_classes (80, in our case) and nms_conf (the NMS IoU threshold).
+'''
+def write_results(prediction, confidence, num_class, nms_conf = 0.4):
+    conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
+    prediction = prediction*conf_mask
+    '''
+    transform the (center x, center y, width, height) attributes of our boxes, 
+    to (top-left corner x, top-left corner y, right-bottom corner x, right-bottom corner y).
+    '''
+    box_corner = prediction.new(prediction.shape)
+    box_corner[:,:,0] = prediction[:,:,0] - prediction[:,:,2]/2
+    box_corner[:,:,1] = prediction[:,:,1] - prediction[:,:,3]/2
+    box_corner[:,:,2] = prediction[:,:,0] + prediction[:,:,2]/2
+    box_corner[:,:,3] = prediction[:,:,1] + prediction[:,:,3]/2
+
+    # reload new shape data
+    prediction[:,:,:4] = box_corner[:,:,:4]
+
+    batch_size = prediction.size(0)
+
+    write = False
+
+    for ind in range(batch_size):
+        image_pred = prediction[ind]          #image Tensor
+        '''
+        remove the 80 class scores from each row, 
+        and instead add the index of the class having the maximum values, 
+        as well the class score of that class.
+        '''
+        max_conf_score, max_conf_index = torch.max(image_pred[:,5:5+num_class], 1)
+        max_conf_index = max_conf_index.float().unsqueeze(1)
+        max_conf_score = max_conf_score.float().unsqueeze(1)
+        seq = (image_pred[:,:5], max_conf_score, max_conf_index)
+        image_pred = torch.cat(seq, 1)
+        '''
+        delete bboxes which having an object confidence less than the threshold
+        The try-except block is there to handle situations where we get no detections.
+        '''
+        non_zero_ind =  torch.nonzero(image_pred[:,4])
+        try:
+            # image_pred_ = image_pred[non_zero_ind.squeeze(),:].view(-1,7)
+            image_pred_ = image_pred[non_zero_ind.squeeze(),:].view(-1,7)
+        except:
+            continue
+        #For PyTorch 0.4 compatibility
+        #Since the above code with not raise exception for no detection 
+        #as scalars are supported in PyTorch 0.4
+        if image_pred_.shape[0] == 0:
+            continue 
+
+        #Get the various classes detected in the image
+        img_classes = image_pred_[:,-1].unique()
+
+        for cls in img_classes:
+            cls_mask = image_pred_*(image_pred_[:,-1]==cls).float().unsqueeze(1)
+            # it is -2, for class zero may confuse the selection
+            class_mask_ind = torch.nonzero(cls_mask[:,-2]).unsqueeze()
+
+            # image_pred_class = image_pred_[class_mask_ind].view(-1, 7)
+            image_pred_class = image_pred_[class_mask_ind]
+
+            #sort the detections such that the entry with the maximum objectness
+            #confidence is at the top
+            conf_sort_index = torch.sort(image_pred_class[:,4], descending=True)[1]
+            image_pred_class = image_pred_class[conf_sort_index]
+            idx = image_pred_class.size[0]
+
+            # implementation NMS algorithm
+            for i in range(idx):
+                #Get the IOUs of all boxes that come after the one we are looking at 
+                #in the loop
+
+                '''
+                might try to index a value that is out of bounds (IndexError), 
+                or the slice image_pred_class[i+1:] may return an empty tensor,
+                '''
+                try:
+                    ious = bbox_iou(image_pred_class[i].unsqueeze[0], image_pred_class[i+1:])
+                except ValueError:
+                    break
+                except IndexError:
+                    break
+
+                #Zero out all the detections that have IoU > treshhold
+                iou_mask = (ious < nms_conf).float().unsqueeze(1)
+                image_pred_class[i+1:] *= iou_mask
+
+                # Remove the non-zero entries
+                # using object confidence to select tensor
+                non_zero_ind = torch.nonzero(image_pred_class[:,4]).squeeze(0)
+                image_pred_class = image_pred_class[non_zero_ind]
+            
+
+            
+
+
+
