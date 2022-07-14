@@ -9,3 +9,5 @@
  
 # yolo
  there is only yolov3 demo
+ 
+ to detect object on videostream--run detector.py 
