@@ -86,9 +86,6 @@ class Yolov1(nn.Module):
         x = self.linear2(x)
         
         return x
-class yolov3(nn.Module):
-    def __init__(self, num_class, init_param : bool = False) -> None:
-        super(yolov3, self).__init__()
 def parse_cfg(cfgfile):
     """
     Takes a configuration file
@@ -238,8 +235,6 @@ class Darknet(nn.Module):
         cache_outputs = {}
         write = 0
 
-        if CUDA:
-            x = x.cuda()
         for i, module in enumerate(modules):
             module_type = (module["type"])
             if module_type == "convolutional" or module_type == "upsample":
@@ -307,7 +302,7 @@ class Darknet(nn.Module):
                 #If module_type is convolutional load weights
                 #Otherwise ignore.
 
-                if module_type == "Convolutional":
+                if module_type == "convolutional":
                     model = self.module_list[i]
                     try:
                         batch_normalize = int(self.blocks[i+1]["batch_normalize"])

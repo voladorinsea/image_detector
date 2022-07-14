@@ -1,5 +1,6 @@
 '''conatin the tool functions for the network'''
 from __future__ import division
+import argparse
 
 import torch 
 import torch.nn as nn
@@ -57,8 +58,8 @@ def bbox_iou(box1, box2):
     """
     Returns the IoU of two bounding boxes 
     """
-    b1_x1, b1_y1, b1_x2, b1_y2 = box1[:0], box1[:1], box1[:2], box1[:3]
-    b2_x1, b2_y1, b2_x2, b2_y2 = box2[:0], box2[:1], box2[:2], box2[:3]
+    b1_x1, b1_y1, b1_x2, b1_y2 = box1[:,0], box1[:,1], box1[:,2], box1[:,3]
+    b2_x1, b2_y1, b2_x2, b2_y2 = box2[:,0], box2[:,1], box2[:,2], box2[:,3]
 
     inter_rect_x1 = torch.max(b1_x1, b2_x1)
     inter_rect_y1 = torch.max(b1_y1, b2_y1)
@@ -77,13 +78,20 @@ def bbox_iou(box1, box2):
     iou = inter_area/(b1_area + b2_area - inter_area)
 
     return iou
-
-
+def unique(tensor):
+    tensor_np = tensor.cpu().numpy()
+    unique_np = np.unique(tensor_np)
+    unique_tensor = torch.from_numpy(unique_np)
+    
+    tensor_res = tensor.new(unique_tensor.shape)
+    tensor_res.copy_(unique_tensor)
+    return tensor_res
 '''
 The functions takes as as input the prediction, confidence (objectness score threshold), 
 num_classes (80, in our case) and nms_conf (the NMS IoU threshold).
 '''
 def write_results(prediction, confidence, num_class, nms_conf = 0.4):
+
     conf_mask = (prediction[:,:,4] > confidence).float().unsqueeze(2)
     prediction = prediction*conf_mask
     '''
@@ -119,7 +127,7 @@ def write_results(prediction, confidence, num_class, nms_conf = 0.4):
         delete bboxes which having an object confidence less than the threshold
         The try-except block is there to handle situations where we get no detections.
         '''
-        non_zero_ind =  torch.nonzero(image_pred[:,4])
+        non_zero_ind =  (torch.nonzero(image_pred[:,4]))
         try:
             # image_pred_ = image_pred[non_zero_ind.squeeze(),:].view(-1,7)
             image_pred_ = image_pred[non_zero_ind.squeeze(),:].view(-1,7)
@@ -132,21 +140,21 @@ def write_results(prediction, confidence, num_class, nms_conf = 0.4):
             continue 
 
         #Get the various classes detected in the image
-        img_classes = image_pred_[:,-1].unique()
+        img_classes = unique(image_pred_[:,-1])
 
         for cls in img_classes:
             cls_mask = image_pred_*(image_pred_[:,-1]==cls).float().unsqueeze(1)
             # it is -2, for class zero may confuse the selection
-            class_mask_ind = torch.nonzero(cls_mask[:,-2]).unsqueeze()
+            class_mask_ind = torch.nonzero(cls_mask[:,-2]).squeeze()
 
             # image_pred_class = image_pred_[class_mask_ind].view(-1, 7)
-            image_pred_class = image_pred_[class_mask_ind]
+            image_pred_class = image_pred_[class_mask_ind].view(-1, 7)
 
             #sort the detections such that the entry with the maximum objectness
             #confidence is at the top
             conf_sort_index = torch.sort(image_pred_class[:,4], descending=True)[1]
             image_pred_class = image_pred_class[conf_sort_index]
-            idx = image_pred_class.size[0]
+            idx = image_pred_class.size(0)
 
             # implementation NMS algorithm
             for i in range(idx):
@@ -158,7 +166,7 @@ def write_results(prediction, confidence, num_class, nms_conf = 0.4):
                 or the slice image_pred_class[i+1:] may return an empty tensor,
                 '''
                 try:
-                    ious = bbox_iou(image_pred_class[i].unsqueeze[0], image_pred_class[i+1:])
+                    ious = bbox_iou(image_pred_class[i].unsqueeze(0), image_pred_class[i+1:])
                 except ValueError:
                     break
                 except IndexError:
@@ -170,11 +178,62 @@ def write_results(prediction, confidence, num_class, nms_conf = 0.4):
 
                 # Remove the non-zero entries
                 # using object confidence to select tensor
-                non_zero_ind = torch.nonzero(image_pred_class[:,4]).squeeze(0)
-                image_pred_class = image_pred_class[non_zero_ind]
-            
+                non_zero_ind = torch.nonzero(image_pred_class[:,4]).squeeze()
+                image_pred_class = image_pred_class[non_zero_ind].view(-1,7)
 
-            
+            batch_ind = image_pred_class.new(image_pred_class.size(0), 1).fill_(ind)
 
+            seq = batch_ind, image_pred_class
 
+            if not write:
+                output = torch.cat(seq, 1)
+                write = True
+            else:
+                out = torch.cat(seq, 1)
+                output = torch.cat((output, out))
+
+        '''
+        check whether output has been initialized at all or not. 
+        If it hasn't been means there's hasn't been a single detection in any images of the batch.
+        '''
+    try:
+        return output
+    except:
+        return 0
+
+def letterbox_image(img, inp_dim):
+    '''resize image with unchanged aspect ratio using padding'''
+    img_w, img_h = img.shape[1], img.shape[0]
+    w, h = inp_dim
+    new_w = int(img_w * min(w/img_w, h/img_h))
+    new_h = int(img_h * min(w/img_w, h/img_h))
+    resized_image = cv2.resize(img, (new_w,new_h), interpolation = cv2.INTER_CUBIC)
+    
+    canvas = np.full((inp_dim[1], inp_dim[0], 3), 128)
+
+    canvas[(h-new_h)//2:(h-new_h)//2 + new_h,(w-new_w)//2:(w-new_w)//2 + new_w,  :] = resized_image
+    
+    return canvas
+def letterbox_image(img, inp_dim):
+    '''resize image with unchanged aspect ratio using padding'''
+    img_w, img_h = img.shape[1], img.shape[0]
+    w, h = inp_dim
+    new_w = int(img_w * min(w/img_w, h/img_h))
+    new_h = int(img_h * min(w/img_w, h/img_h))
+    resized_image = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_CUBIC)
+
+    canvas = np.full((inp_dim[1], inp_dim[0], 3), 128)
+    canvas[(h-new_h)//2:(h-new_h)//2 + new_h,(w-new_w)//2:(w-new_w)//2 + new_w,  :] = resized_image
+    
+    return canvas
+def prep_image(img, inp_dim):
+    """
+    Prepare image for inputting to the neural network. 
+    
+    Returns a Variable 
+    """
+    img = cv2.resize(img, (inp_dim, inp_dim))
+    img = img[:,:,::-1].transpose((2,0,1)).copy()
+    img = torch.from_numpy(img).float().div(255.0).unsqueeze(0)
+    return img
 
