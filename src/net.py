@@ -198,6 +198,11 @@ def create_modules(blocks):
 
             detection = DetectionLayer(anchors)
             module.add_module("yolo_{}".format(index), detection)
+        elif x["type"] == "maxpool":
+            pool_size = int(x["size"])
+            pool_stride = int(x["stride"])
+            maxpool = nn.MaxPool2d(pool_size, pool_stride)
+            module.add_module("maxpool_{}".format(index), maxpool)
         
         module_list.append(module)
         prev_filters = filters
@@ -279,7 +284,16 @@ class Darknet(nn.Module):
                     write = 1
                 else:
                     detections = torch.cat((detections, x), 1)
-
+            elif module_type == "maxpool":
+                try:
+                    pool_pad = int(module["pad"])
+                except:
+                    pool_pad = 0
+                
+                if pool_pad:
+                    pd = (0, 1, 0, 1)
+                    x = F.pad(x, pd, 'constant', 0)
+                x = self.module_list[i](x)
             cache_outputs[i] = x
         return detections
     
@@ -367,12 +381,13 @@ class Darknet(nn.Module):
 
 
 if __name__ == '__main__':
-    model = Darknet("cfg/yolov3.cfg").cuda()
-    model.load_weights("weights\yolov3.weights")
-    inp = get_test_input()
+    model = Darknet("cfg/yolov3-tiny.cfg").cuda()
+    model.load_weights("weights\yolov3-tiny.weights")
+    inp = get_test_input().cuda()
     model.eval()
 
     with torch.no_grad():
         t1 = time.perf_counter()
+        print(model)
         pred = model(inp, True)
         print(time.perf_counter() - t1)

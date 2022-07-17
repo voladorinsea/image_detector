@@ -32,9 +32,9 @@ def arg_parse():
     parser.add_argument("--nms_thresh", dest = "nms_thresh", type=float,
                         help = "NMS Threshhold", default = 0.4)
     parser.add_argument("--cfg", dest = 'cfgfile', help = "Config file",
-                        default = "cfg\yolov3.cfg", type = str)
+                        default = "cfg\yolov3-tiny.cfg", type = str)
     parser.add_argument("--weights", dest = 'weightsfile', help = "weightsfile",
-                        default = "weights\yolov3.weights", type = str)
+                        default = "weights\yolov3-tiny.weights", type = str)
     parser.add_argument("--reso", dest = 'reso', help = "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
                         default = "416", type = str)
     parser.add_argument("--video", dest = "videofile", help = "Video file to     run detection on", 
@@ -97,11 +97,11 @@ if __name__ == "__main__":
     assert cap.isOpened(), 'cannot capture source'
 
     frames = 0
-
-    start = time.time() 
+ 
     while cap.isOpened():
         ret,frame = cap.read()
         if ret:
+            start = time.time()
             img = prep_image(frame, inp_dim)
             # notice that: im_dim is photo zoom
             im_dim = frame.shape[1], frame.shape[0]
@@ -117,7 +117,7 @@ if __name__ == "__main__":
            
             if type(output) == int:
                 frames += 1
-                print("FPS of the video is {:5.4f}".format( frames / (time.time() - start)))
+                print("FPS of the video is {:5.4f}".format( 1 / (time.time() - start)))
                 cv2.imshow("frame", frame)
                 key = cv2.waitKey(1)
                 if key & 0xFF == ord('q'):
@@ -144,6 +144,6 @@ if __name__ == "__main__":
                 break
             frames += 1
             print(time.time() - start)
-            print("FPS of the video is {:5.2f}".format( frames / (time.time() - start)))
+            print("FPS of the video is {:5.2f}".format( 1 / (time.time() - start)))
         else:
             break     
