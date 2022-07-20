@@ -18,6 +18,7 @@ def parse_args():
     return args
 
 if __name__ == "__main__":
-    args = parse_args()
-    print(args.address)
-    print(os.path.exists('imgs'))
+    #args = parse_args()
+    #print(args.address)
+    #print(os.path.exists('imgs'))
+    print(torch.__version__)

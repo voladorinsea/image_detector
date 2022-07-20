@@ -32,9 +32,9 @@ def arg_parse():
     parser.add_argument("--nms_thresh", dest = "nms_thresh", type=float,
                         help = "NMS Threshhold", default = 0.4)
     parser.add_argument("--cfg", dest = 'cfgfile', help = "Config file",
-                        default = "cfg\yolov3-tiny.cfg", type = str)
+                        default = "cfg/yolov3.cfg", type = str)
     parser.add_argument("--weights", dest = 'weightsfile', help = "weightsfile",
-                        default = "weights\yolov3-tiny.weights", type = str)
+                        default = "weights/yolov3.weights", type = str)
     parser.add_argument("--reso", dest = 'reso', help = "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
                         default = "416", type = str)
     parser.add_argument("--video", dest = "videofile", help = "Video file to     run detection on", 
@@ -63,6 +63,7 @@ def write(x, results):
     cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
     return img
 if __name__ == "__main__":
+    addr = os.getcwd()
     args = arg_parse()
     images = args.images
     batch_size = args.bs
@@ -73,8 +74,8 @@ if __name__ == "__main__":
     num_classes = 80    #For COCO
 
     print("Loading network.....")
-    model = Darknet(args.cfgfile)
-    model.load_weights(args.weightsfile)
+    model = Darknet(os.path.join(addr, args.cfgfile))
+    model.load_weights(os.path.join(addr, args.weightsfile))
     print("Network successfully loaded")
 
     model.net_info["height"] = args.reso
@@ -130,10 +131,10 @@ if __name__ == "__main__":
             im_dim = im_dim.repeat(output.size(0), 1)/inp_dim
             output[:,1:5] *= im_dim
 
-            classes = load_classes("data/coco.names")
+            classes = load_classes(os.path.join(addr, "data/coco.names"))
     
             colors = []
-            with open("color\pallete", "rb") as fp:
+            with open(os.path.join(addr, "color/pallete"), "rb") as fp:
                 colors = pkl.load(fp)
 
             list(map(lambda x: write(x, frame), output))
