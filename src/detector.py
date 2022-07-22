@@ -1,5 +1,8 @@
 from __future__ import division
+<<<<<<< HEAD
 from doctest import FAIL_FAST
+=======
+>>>>>>> 8bd1a4bf8743b3e12bcac7cdaaa80493d4d6762a
 import time
 import torch 
 import torch.nn as nn
@@ -15,10 +18,13 @@ import pickle as pkl
 import pandas as pd
 import random
 
+<<<<<<< HEAD
 from torch2trt import torch2trt
 
 from models import Darknet_Backbone,YOLOHead
 
+=======
+>>>>>>> 8bd1a4bf8743b3e12bcac7cdaaa80493d4d6762a
 '''
 Creating Command Line Arguments
 '''
@@ -37,9 +43,15 @@ def arg_parse():
     parser.add_argument("--nms_thresh", dest = "nms_thresh", type=float,
                         help = "NMS Threshhold", default = 0.4)
     parser.add_argument("--cfg", dest = 'cfgfile', help = "Config file",
+<<<<<<< HEAD
                         default = "cfg\yolov3.cfg", type = str)
     parser.add_argument("--weights", dest = 'weightsfile', help = "weightsfile",
                         default = "weights\yolov3.weights", type = str)
+=======
+                        default = "cfg\yolov3-tiny.cfg", type = str)
+    parser.add_argument("--weights", dest = 'weightsfile', help = "weightsfile",
+                        default = "weights\yolov3-tiny.weights", type = str)
+>>>>>>> 8bd1a4bf8743b3e12bcac7cdaaa80493d4d6762a
     parser.add_argument("--reso", dest = 'reso', help = "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
                         default = "416", type = str)
     parser.add_argument("--video", dest = "videofile", help = "Video file to     run detection on", 
@@ -67,8 +79,11 @@ def write(x, results):
     cv2.rectangle(img, c1, c2,color, -1)
     cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
     return img
+<<<<<<< HEAD
 
     
+=======
+>>>>>>> 8bd1a4bf8743b3e12bcac7cdaaa80493d4d6762a
 if __name__ == "__main__":
     args = arg_parse()
     images = args.images
@@ -77,6 +92,7 @@ if __name__ == "__main__":
     nms_thesh = args.nms_thresh
     start = 0
     CUDA = torch.cuda.is_available()
+<<<<<<< HEAD
     TENSORRT = True
 
     num_classes = 80    #For COCO
@@ -111,6 +127,26 @@ if __name__ == "__main__":
     assert inp_dim % 32 == 0
     assert inp_dim > 32
 
+=======
+    num_classes = 80    #For COCO
+
+    print("Loading network.....")
+    model = Darknet(args.cfgfile)
+    model.load_weights(args.weightsfile)
+    print("Network successfully loaded")
+
+    model.net_info["height"] = args.reso
+    inp_dim = int(model.net_info["height"])
+    assert inp_dim % 32 == 0
+    assert inp_dim > 32
+
+    # If there's a GPU available, put the model on GPU
+    if CUDA:
+        model.cuda()
+    
+    model.eval()
+
+>>>>>>> 8bd1a4bf8743b3e12bcac7cdaaa80493d4d6762a
     videofile = "video.avi"
     
     # cap = cv2.VideoCapture(videofile)
@@ -134,10 +170,14 @@ if __name__ == "__main__":
                 im_dim = im_dim.cuda()
                 img = img.cuda()
             with torch.no_grad():
+<<<<<<< HEAD
                 if TENSORRT:
                     output = yolo_head(model_trt(img))
                 else:
                     output = model(img, CUDA)
+=======
+                output = model(img, CUDA)
+>>>>>>> 8bd1a4bf8743b3e12bcac7cdaaa80493d4d6762a
             
             output = write_results(output, confidence, num_classes, nms_thesh)
            
