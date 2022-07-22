@@ -1,4 +1,5 @@
 from __future__ import division
+from doctest import FAIL_FAST
 import time
 import torch 
 import torch.nn as nn
@@ -10,10 +11,13 @@ import argparse
 import os 
 from net import Darknet
 import os.path as osp
+import pickle as pkl
 import pandas as pd
 import random
 
 from torch2trt import torch2trt
+
+from models import Darknet_Backbone,YOLOHead
 
 '''
 Creating Command Line Arguments
@@ -73,30 +77,39 @@ if __name__ == "__main__":
     nms_thesh = args.nms_thresh
     start = 0
     CUDA = torch.cuda.is_available()
-    #CUDA = False
-
     TENSORRT = True
 
     num_classes = 80    #For COCO
 
-    print("Loading network.....")
-    model = Darknet(args.cfgfile)
-    model.load_weights(args.weightsfile)
-    print("Network successfully loaded")
+    if TENSORRT:
+        print("Loading network.....")
+        model_backbone = Darknet_Backbone(args.cfgfile, img_size=int(args.reso)).cuda()
+        model_backbone.load_darknet_weights(args.weightsfile)
+        model_backbone.eval()
+        # 添加 Detection Head
+        yolo_head = YOLOHead(config_path=args.cfgfile)
 
-    model.net_info["height"] = args.reso
-    inp_dim = int(model.net_info["height"])
+        # DarknetBackbone 转换为 TensorRT 模型
+        x = torch.rand(size=(1, 3,  int(args.reso), int(args.reso))).cuda()
+        model_trt = torch2trt(model_backbone, [x])
+        print("Network successfully loaded")
+
+    else:
+        print("Loading network.....")
+        model = Darknet(args.cfgfile)
+        model.load_weights(args.weightsfile)
+        print("Network successfully loaded")
+
+        model.net_info["height"] = args.reso
+        # If there's a GPU available, put the model on GPU
+        if CUDA:
+            model.cuda()
+        model.eval()
+
+
+    inp_dim = int(args.reso)
     assert inp_dim % 32 == 0
     assert inp_dim > 32
-
-    # If there's a GPU available, put the model on GPU
-    if CUDA:
-        model.cuda()
-    
-    model.eval()
-
-    if TENSORRT:
-        x = torch.rand(size=(1, 3,  opt.img_size, opt.img_size)).cuda()
 
     videofile = "video.avi"
     
@@ -121,7 +134,10 @@ if __name__ == "__main__":
                 im_dim = im_dim.cuda()
                 img = img.cuda()
             with torch.no_grad():
-                output = model(img, CUDA)
+                if TENSORRT:
+                    output = yolo_head(model_trt(img))
+                else:
+                    output = model(img, CUDA)
             
             output = write_results(output, confidence, num_classes, nms_thesh)
            
