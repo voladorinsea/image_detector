@@ -1,4 +1,5 @@
 from __future__ import division
+from doctest import FAIL_FAST
 import time
 import torch 
 import torch.nn as nn
@@ -13,6 +14,10 @@ import os.path as osp
 import pickle as pkl
 import pandas as pd
 import random
+
+from torch2trt import torch2trt
+
+from models import Darknet_Backbone,YOLOHead
 
 '''
 Creating Command Line Arguments
@@ -32,9 +37,9 @@ def arg_parse():
     parser.add_argument("--nms_thresh", dest = "nms_thresh", type=float,
                         help = "NMS Threshhold", default = 0.4)
     parser.add_argument("--cfg", dest = 'cfgfile', help = "Config file",
-                        default = "cfg\yolov3-tiny.cfg", type = str)
+                        default = "cfg\yolov3.cfg", type = str)
     parser.add_argument("--weights", dest = 'weightsfile', help = "weightsfile",
-                        default = "weights\yolov3-tiny.weights", type = str)
+                        default = "weights\yolov3.weights", type = str)
     parser.add_argument("--reso", dest = 'reso', help = "Input resolution of the network. Increase to increase accuracy. Decrease to increase speed",
                         default = "416", type = str)
     parser.add_argument("--video", dest = "videofile", help = "Video file to     run detection on", 
@@ -62,6 +67,8 @@ def write(x, results):
     cv2.rectangle(img, c1, c2,color, -1)
     cv2.putText(img, label, (c1[0], c1[1] + t_size[1] + 4), cv2.FONT_HERSHEY_PLAIN, 1, [225,255,255], 1)
     return img
+
+    
 if __name__ == "__main__":
     args = arg_parse()
     images = args.images
@@ -70,23 +77,39 @@ if __name__ == "__main__":
     nms_thesh = args.nms_thresh
     start = 0
     CUDA = torch.cuda.is_available()
+    TENSORRT = True
+
     num_classes = 80    #For COCO
 
-    print("Loading network.....")
-    model = Darknet(args.cfgfile)
-    model.load_weights(args.weightsfile)
-    print("Network successfully loaded")
+    if TENSORRT:
+        print("Loading network.....")
+        model_backbone = Darknet_Backbone(args.cfgfile, img_size=int(args.reso)).cuda()
+        model_backbone.load_darknet_weights(args.weightsfile)
+        model_backbone.eval()
+        # 添加 Detection Head
+        yolo_head = YOLOHead(config_path=args.cfgfile)
 
-    model.net_info["height"] = args.reso
-    inp_dim = int(model.net_info["height"])
+        # DarknetBackbone 转换为 TensorRT 模型
+        x = torch.rand(size=(1, 3,  int(args.reso), int(args.reso))).cuda()
+        model_trt = torch2trt(model_backbone, [x])
+        print("Network successfully loaded")
+
+    else:
+        print("Loading network.....")
+        model = Darknet(args.cfgfile)
+        model.load_weights(args.weightsfile)
+        print("Network successfully loaded")
+
+        model.net_info["height"] = args.reso
+        # If there's a GPU available, put the model on GPU
+        if CUDA:
+            model.cuda()
+        model.eval()
+
+
+    inp_dim = int(args.reso)
     assert inp_dim % 32 == 0
     assert inp_dim > 32
-
-    # If there's a GPU available, put the model on GPU
-    if CUDA:
-        model.cuda()
-    
-    model.eval()
 
     videofile = "video.avi"
     
@@ -111,7 +134,10 @@ if __name__ == "__main__":
                 im_dim = im_dim.cuda()
                 img = img.cuda()
             with torch.no_grad():
-                output = model(img, CUDA)
+                if TENSORRT:
+                    output = yolo_head(model_trt(img))
+                else:
+                    output = model(img, CUDA)
             
             output = write_results(output, confidence, num_classes, nms_thesh)
            
